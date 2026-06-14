@@ -89,9 +89,8 @@ export default function Dashboard() {
               className="rs-input"
               type="text"
               value={jobTitle}
-              onChange={(e) => onJobTitleChange(e.target.value)}
+              onChange={(e) => setJobTitle(e.target.value)}
               placeholder="e.g. Senior Java Developer"
-              onInput={(e) => setJobTitle(e.target.value)}
             />
           </div>
 
@@ -104,7 +103,7 @@ export default function Dashboard() {
               min="0"
               max="20"
               value={minExperience}
-              onInput={(e) => setMinExperience(Number(e.target.value))}
+              onChange={(e) => setMinExperience(Number(e.target.value))}
             />
           </div>
 
@@ -115,7 +114,7 @@ export default function Dashboard() {
               className="rs-input"
               type="text"
               value={mustHaveSkills}
-              onInput={(e) => setMustHaveSkills(e.target.value)}
+              onChange={(e) => setMustHaveSkills(e.target.value)}
               placeholder="e.g. Java, Spring Boot, MySQL"
             />
           </div>
@@ -127,7 +126,7 @@ export default function Dashboard() {
               className="rs-input"
               type="text"
               value={optionalSkills}
-              onInput={(e) => setOptionalSkills(e.target.value)}
+              onChange={(e) => setOptionalSkills(e.target.value)}
               placeholder="e.g. Docker, Kubernetes, AWS"
             />
           </div>
@@ -150,7 +149,7 @@ export default function Dashboard() {
               className="rs-textarea"
               style={{ height: 100, resize: 'vertical' }}
               value={jobDescription}
-              onInput={(e) => setJobDescription(e.target.value)}
+              onChange={(e) => setJobDescription(e.target.value)}
               placeholder="Paste the job description here — include required skills, experience, and qualifications."
             />
             <p style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>

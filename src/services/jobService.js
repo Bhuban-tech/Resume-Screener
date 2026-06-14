@@ -1,27 +1,24 @@
-import axios from 'axios';
-import { API_BASE_URL } from '../config/index.js';
-import { getErrorMessage } from './resumeService.js';
+/**
+ * jobService.js
+ *
+ * CRUD operations for saved job profiles.
+ */
+import { apiClient } from './api/apiClient.js';
 
-const client = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: { Accept: 'application/json' },
-});
-
+/**
+ * Returns all saved job configurations from the database.
+ * @returns {Promise<JobDto[]>}
+ */
 export async function listJobs() {
-  try {
-    const { data } = await client.get('/jobs');
-    return data;
-  } catch (err) {
-    throw new Error(getErrorMessage(err));
-  }
+  const { data } = await apiClient.get('/jobs');
+  return Array.isArray(data) ? data : [];
 }
 
+/**
+ * Returns a single job by ID.
+ * @returns {Promise<JobDto>}
+ */
 export async function getJob(id) {
-  try {
-    const { data } = await client.get(`/jobs/${id}`);
-    return data;
-  } catch (err) {
-    throw new Error(getErrorMessage(err));
-  }
+  const { data } = await apiClient.get(`/jobs/${id}`);
+  return data;
 }

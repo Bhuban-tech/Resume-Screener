@@ -1,12 +1,18 @@
-import axios from 'axios';
-import { API_BASE_URL } from '../config/index.js';
-import { mapBackendResponse, getErrorMessage } from './resumeService.js';
-
-const client = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 300000,
-  headers: { Accept: 'application/json' },
-});
+/**
+ * screeningService.js
+ *
+ * Batch-screening upload and async-polling logic.
+ *
+ * Flow:
+ *  1. POST /api/screenings/upload  → returns ScreeningSessionDto (status: PROCESSING)
+ *  2. Poll GET /api/screenings/{id} every POLL_INTERVAL_MS until status is COMPLETED or FAILED
+ *  3. When COMPLETED, map each result through mapBackendResponse
+ *
+ * Long timeouts are set on the shared apiClient (5 min),
+ * which is more than enough for a batch of 50 resumes.
+ */
+import { apiClient } from './api/apiClient.js';
+import { mapBackendResponse } from './resumeService.js';
 
 const POLL_INTERVAL_MS = 1500;
 
@@ -15,7 +21,17 @@ function sleep(ms) {
 }
 
 /**
- * POST /api/screenings/upload — returns session immediately (async)
+ * Starts an async screening session.
+ *
+ * @param {File[]}   files            - Array of File objects (PDF/DOCX)
+ * @param {string}   jobDescription   - Full job description text
+ * @param {string}   jobTitle         - Display title for the job
+ * @param {number}   minExperience    - Minimum years of experience required
+ * @param {string}   mustHaveSkills   - Comma-separated must-have skills
+ * @param {string}   optionalSkills   - Comma-separated nice-to-have skills
+ * @param {number|null} existingJobId - ID of a previously saved job, if reusing
+ * @param {function} onUploadProgress - Called with 0–30 as files upload
+ * @returns {Promise<ScreeningSessionDto>} - The newly created session
  */
 export async function startScreening(
   files,
@@ -31,31 +47,33 @@ export async function startScreening(
   formData.append('jobTitle', jobTitle);
   formData.append('jobDescription', jobDescription);
   formData.append('minExperience', String(minExperience ?? 0));
-  if (mustHaveSkills?.trim()) formData.append('mustHaveSkills', mustHaveSkills.trim());
-  if (optionalSkills?.trim()) formData.append('optionalSkills', optionalSkills.trim());
-  if (existingJobId) formData.append('existingJobId', String(existingJobId));
+  if (mustHaveSkills?.trim())  formData.append('mustHaveSkills', mustHaveSkills.trim());
+  if (optionalSkills?.trim())  formData.append('optionalSkills', optionalSkills.trim());
+  if (existingJobId)           formData.append('existingJobId', String(existingJobId));
   files.forEach((file) => formData.append('files', file));
 
-  try {
-    const response = await client.post('/screenings/upload', formData, {
-      onUploadProgress: (e) => {
-        if (e.total && onUploadProgress) {
-          onUploadProgress(Math.min(30, Math.round((e.loaded * 30) / e.total)));
-        }
-      },
-    });
-    return response.data;
-  } catch (err) {
-    throw new Error(getErrorMessage(err));
-  }
+  const { data } = await apiClient.post('/screenings/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (e.total && onUploadProgress) {
+        onUploadProgress(Math.min(30, Math.round((e.loaded * 30) / e.total)));
+      }
+    },
+  });
+
+  return data;
 }
 
 /**
- * Poll GET /api/screenings/{id} until COMPLETED or FAILED
+ * Polls GET /api/screenings/{id} until the session reaches a terminal state.
+ *
+ * @param {number}   screeningId  - The session ID returned by startScreening
+ * @param {function} onProgress   - Called with (percentComplete 30–100, sessionData)
+ * @returns {Promise<{ session, results }>}
  */
 export async function pollScreeningUntilDone(screeningId, onProgress) {
   while (true) {
-    const { data } = await client.get(`/screenings/${screeningId}`);
+    const { data } = await apiClient.get(`/screenings/${screeningId}`);
     const pct = 30 + Math.round((data.progressPercent || 0) * 0.7);
     onProgress?.(pct, data);
 
@@ -64,19 +82,29 @@ export async function pollScreeningUntilDone(screeningId, onProgress) {
       const list = Array.isArray(data.results) ? data.results : [];
       return { session: data, results: list.map(mapBackendResponse) };
     }
+
     if (data.status === 'FAILED') {
-      throw new Error(data.errorMessage || 'Screening failed');
+      throw new Error(data.errorMessage || 'Screening failed on the server. Please try again.');
     }
+
     await sleep(POLL_INTERVAL_MS);
   }
 }
 
+/**
+ * Returns all screening sessions for the history panel.
+ * @returns {Promise<ScreeningSessionDto[]>}
+ */
 export async function listScreenings() {
-  const { data } = await client.get('/screenings');
-  return data;
+  const { data } = await apiClient.get('/screenings');
+  return Array.isArray(data) ? data : [];
 }
 
+/**
+ * Returns a single screening session (used to reload past results).
+ * @returns {Promise<ScreeningSessionDto>}
+ */
 export async function getScreening(id) {
-  const { data } = await client.get(`/screenings/${id}`);
+  const { data } = await apiClient.get(`/screenings/${id}`);
   return data;
 }
